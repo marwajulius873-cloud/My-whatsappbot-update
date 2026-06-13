@@ -33,8 +33,7 @@ async function connectToWhatsApp() {
         const sock = makeWASocket({
             auth: state,
             logger: pino({ level: 'silent' }),
-            markRead: true,
-            printQRInTerminal: false,
+            printQRInTerminal: true,  // ✅ Enable QR code in terminal
             mobile: false,
         });
 
@@ -42,6 +41,13 @@ async function connectToWhatsApp() {
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
+
+            // Print QR Code when received
+            if (qr) {
+                console.log('\n📱 SCAN THIS QR CODE:\n');
+                console.log(qr);
+                console.log('\nOpen WhatsApp → Linked Devices → Link a Device\n');
+            }
 
             if (connection === 'open') {
                 console.log('✅ Bot is successfully connected and running 24/7!');
@@ -55,20 +61,6 @@ async function connectToWhatsApp() {
                 }
             }
         });
-
-        sock.ev.on('connection.update', async (update) => {
-            if (update.qr) {
-                console.log("QR still received, trying pairing code instead...");
-            }
-        });
-
-        // Use Pairing Code
-        const phoneNumber = "254113123471"; // ← Change this to your number
-        const code = await sock.requestPairingCode(phoneNumber);
-        console.log("\n🔥 YOUR PAIRING CODE:");
-        console.log(code);
-        console.log("\nOn WhatsApp → Linked Devices → Link with Phone Number");
-        console.log("Enter this code:", code);
 
     } catch (err) {
         console.error("❌ Error:", err.message);
