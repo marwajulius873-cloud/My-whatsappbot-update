@@ -1,11 +1,12 @@
 FROM node:20-slim
 
-# Install system dependencies required by sharp
+# Install required system packages
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
     libvips-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
