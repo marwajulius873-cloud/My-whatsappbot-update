@@ -6,22 +6,17 @@ const { Low } = require('lowdb');
 const { JSONFile } = require('lowdb/node');
 const { OpenAI } = require('openai');
 const fs = require('fs-extra');
-const sharp = require('sharp');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const file = new JSONFile('db.json');
 const db = new Low(file);
 
-const messageCount = new Map(); // Anti-spam
+const messageCount = new Map();
 
 async function initDB() {
     await db.read();
-    db.data ||= { 
-        users: {}, 
-        groups: {}, 
-        settings: { prefix: process.env.PREFIX || '!' } 
-    };
+    db.data ||= { users: {}, groups: {}, settings: { prefix: process.env.PREFIX || '!' } };
     await db.write();
 }
 
@@ -34,8 +29,8 @@ function registerCommand(name, handler) {
 const greetings = {
     'hi': 'Hello! 👋 How can I help you today?',
     'hello': 'Hey there! 😊',
-    'gm': 'Good morning! 🌅 Have a great day!',
-    'gn': 'Good night! 🌙 Sweet dreams!',
+    'gm': 'Good morning! 🌅',
+    'gn': 'Good night! 🌙',
 };
 
 async function connectToWhatsApp() {
@@ -56,7 +51,6 @@ async function connectToWhatsApp() {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
             if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                console.log('Reconnecting...');
                 connectToWhatsApp();
             }
         } else if (connection === 'open') {
@@ -73,27 +67,23 @@ async function connectToWhatsApp() {
         }
     });
 
-    // Anti-Delete Viewer
+    // Anti-Delete
     sock.ev.on('messages.update', async (updates) => {
         for (const update of updates) {
             if (update.update.message === null) {
-                const from = update.key.remoteJid;
-                await sock.sendMessage(from, { text: '🗑️ *Anti-Delete*: A message was deleted.' });
+                await sock.sendMessage(update.key.remoteJid, { text: '🗑️ *Anti-Delete*: A message was deleted.' });
             }
         }
     });
 
     await loadCommands(sock);
 
-    // Main Message Handler
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg.key.fromMe && msg.message) {
             const from = msg.key.remoteJid;
             const now = Date.now();
             const user = messageCount.get(from) || { count: 0, last: now };
-
-            // Basic Anti-Spam
             if (now - user.last < 1500 && user.count > 4) return;
             user.count++;
             user.last = now;
@@ -118,7 +108,7 @@ async function connectToWhatsApp() {
                 if (handler) await handler(sock, msg, args, from);
             }
 
-            // Auto Media Downloader
+            // Auto Media Download
             const type = getContentType(msg.message);
             if (['imageMessage', 'videoMessage', 'audioMessage'].includes(type)) {
                 try {
@@ -131,12 +121,11 @@ async function connectToWhatsApp() {
         }
     });
 
-    // Welcome new members
     sock.ev.on('group-participants.update', async (update) => {
         if (update.action === 'add') {
-            await sock.sendMessage(update.id, {
-                text: `👋 Welcome @${update.participants[0].split('@')[0]}!`,
-                mentions: update.participants
+            await sock.sendMessage(update.id, { 
+                text: `👋 Welcome @${update.participants[0].split('@')[0]}!`, 
+                mentions: update.participants 
             });
         }
     });
@@ -144,18 +133,14 @@ async function connectToWhatsApp() {
 
 async function sendWithAutoDelete(sock, from, content, quoted = null) {
     const res = await sock.sendMessage(from, content, { quoted });
-    if (db.data.settings.autoDelete && res?.key) {
-        setTimeout(() => sock.deleteMessage(from, res.key).catch(() => {}), 60000);
-    }
     return res;
 }
 
 async function loadCommands(sock) {
     registerCommand('menu', async (sock, msg, args, from) => {
         const menu = `🤖 *WhatsApp Bot Menu*\n\n` +
-            `!ping • !ai <text> • !sticker (reply to media)\n` +
-            `!download (reply) • !statusdl • !button • !react ❤️\n` +
-            `!kick @user • !promote @user • !autodelete`;
+            `!ping • !ai <text> • !download (reply to media)\n` +
+            `!statusdl • !autodelete`;
         await sendWithAutoDelete(sock, from, { text: menu }, msg);
     });
 
@@ -164,7 +149,7 @@ async function loadCommands(sock) {
     });
 
     registerCommand('ai', async (sock, msg, args, from) => {
-        if (!args.length) return sendWithAutoDelete(sock, from, { text: 'Usage: !ai What is the meaning of life?' }, msg);
+        if (!args.length) return sendWithAutoDelete(sock, from, { text: 'Usage: !ai your question' }, msg);
         try {
             const completion = await openai.chat.completions.create({
                 model: "gpt-4o-mini",
@@ -172,21 +157,7 @@ async function loadCommands(sock) {
             });
             await sendWithAutoDelete(sock, from, { text: `🤖 ${completion.choices[0].message.content}` }, msg);
         } catch (e) {
-            await sendWithAutoDelete(sock, from, { text: '❌ AI service unavailable.' }, msg);
-        }
-    });
-
-    registerCommand('sticker', async (sock, msg, args, from) => {
-        const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-        if (!quoted?.imageMessage && !quoted?.videoMessage) {
-            return sendWithAutoDelete(sock, from, { text: 'Reply to an image or video with !sticker' }, msg);
-        }
-        try {
-            const buffer = await downloadMediaMessage({ message: quoted }, 'buffer', {}, { reuploadRequest: sock.updateMediaMessage });
-            const stickerBuffer = await sharp(buffer).resize(512, 512).webp({ quality: 80 }).toBuffer();
-            await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: msg });
-        } catch (e) {
-            await sendWithAutoDelete(sock, from, { text: 'Failed to make sticker.' }, msg);
+            await sendWithAutoDelete(sock, from, { text: '❌ AI unavailable.' }, msg);
         }
     });
 
@@ -195,8 +166,6 @@ async function loadCommands(sock) {
         await db.write();
         await sendWithAutoDelete(sock, from, { text: `🗑️ Auto-delete is now ${db.data.settings.autoDelete ? 'ON' : 'OFF'}` }, msg);
     });
-
-    // Add more commands here if needed
 }
 
 connectToWhatsApp();
