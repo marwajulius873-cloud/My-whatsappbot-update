@@ -3,6 +3,8 @@ const express = require('express');
 const makeWASocket = require('@whiskeysockets/baileys').default;
 const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+const fs = require('fs');
+const path = require('path');
 
 console.log("🚀 Starting WhatsApp Bot...");
 
@@ -28,43 +30,76 @@ app.listen(PORT, '0.0.0.0', () => {
 
 async function connectToWhatsApp() {
     try {
-        const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+        // Delete old auth info to force fresh QR code
+        const authPath = 'auth_info';
+        if (fs.existsSync(authPath)) {
+            console.log('🗑️  Clearing old authentication data...');
+            fs.rmSync(authPath, { recursive: true, force: true });
+        }
+
+        const { state, saveCreds } = await useMultiFileAuthState(authPath);
 
         const sock = makeWASocket({
             auth: state,
-            logger: pino({ level: 'silent' }),
+            logger: pino({ level: 'info' }),
             mobile: false,
-            // Remove printQRInTerminal - we'll handle it manually
+            browser: ['Ubuntu', 'Chrome', '20.0.04'],
         });
 
         sock.ev.on('creds.update', saveCreds);
 
         sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
+            const { connection, lastDisconnect, qr, receivedPendingNotifications } = update;
 
-            // Handle QR Code manually (new way)
+            // Handle QR Code
             if (qr) {
-                console.log('\n📱 SCAN THIS QR CODE:\n');
+                console.log('\n' + '='.repeat(50));
+                console.log('📱 SCAN THIS QR CODE:');
+                console.log('='.repeat(50));
                 console.log(qr);
-                console.log('\n Open WhatsApp → Settings → Linked Devices → Link a Device');
-                console.log('⚠️ QR code expires in 30 seconds\n');
+                console.log('='.repeat(50));
+                console.log(' Open WhatsApp → Settings → Linked Devices → Link a Device');
+                console.log('⚠️  QR code expires in 30 seconds!');
+                console.log('='.repeat(50) + '\n');
             }
 
             if (connection === 'open') {
                 console.log('✅ Bot is successfully connected and running 24/7!');
+                console.log(' Phone number:', sock.user?.id?.split('@')[0]);
             }
 
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-                console.log('Connection closed. Reconnecting:', shouldReconnect);
-                if (shouldReconnect) {
-                    setTimeout(connectToWhatsApp, 10000);
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                console.log('❌ Connection closed.');
+                console.log('Status code:', statusCode);
+                
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                
+                if (statusCode === DisconnectReason.loggedOut) {
+                    console.log('🚫 Device logged out. Please scan QR code again.');
                 }
+                
+                if (shouldReconnect) {
+                    console.log('🔄 Reconnecting in 5 seconds...');
+                    setTimeout(connectToWhatsApp, 5000);
+                }
+            }
+
+            if (receivedPendingNotifications) {
+                console.log('📬 Received pending notifications');
+            }
+        });
+
+        sock.ev.on('messages.upsert', async (m) => {
+            if (m.type === 'notify') {
+                console.log('📨 New message received');
             }
         });
 
     } catch (err) {
         console.error("❌ Error:", err.message);
+        console.error(err.stack);
+        setTimeout(connectToWhatsApp, 10000);
     }
 }
 
