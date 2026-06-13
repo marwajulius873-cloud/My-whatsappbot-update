@@ -33,8 +33,8 @@ async function connectToWhatsApp() {
         const sock = makeWASocket({
             auth: state,
             logger: pino({ level: 'silent' }),
-            printQRInTerminal: true,  // ✅ Enable QR code in terminal
             mobile: false,
+            // Remove printQRInTerminal - we'll handle it manually
         });
 
         sock.ev.on('creds.update', saveCreds);
@@ -42,11 +42,12 @@ async function connectToWhatsApp() {
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
-            // Print QR Code when received
+            // Handle QR Code manually (new way)
             if (qr) {
                 console.log('\n📱 SCAN THIS QR CODE:\n');
                 console.log(qr);
-                console.log('\nOpen WhatsApp → Linked Devices → Link a Device\n');
+                console.log('\n Open WhatsApp → Settings → Linked Devices → Link a Device');
+                console.log('⚠️ QR code expires in 30 seconds\n');
             }
 
             if (connection === 'open') {
