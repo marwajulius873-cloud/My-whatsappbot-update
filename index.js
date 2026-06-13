@@ -4,7 +4,7 @@ const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/bai
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 
-console.log("Starting WhatsApp Bot...");
+console.log("🚀 Starting WhatsApp Bot on Render...");
 
 async function connectToWhatsApp() {
     try {
@@ -14,7 +14,7 @@ async function connectToWhatsApp() {
             auth: state,
             logger: pino({ level: 'silent' }),
             markRead: true,
-            printQRInTerminal: false,   // Disabled because deprecated
+            printQRInTerminal: false,
         });
 
         sock.ev.on('creds.update', saveCreds);
@@ -23,25 +23,27 @@ async function connectToWhatsApp() {
             const { connection, lastDisconnect, qr } = update;
 
             if (qr) {
-                console.log('🔥 SCAN THIS QR CODE WITH WHATSAPP:');
+                console.log('\n🔥 === SCAN THIS QR CODE ===\n');
                 qrcode.generate(qr, { small: true });
+                console.log('\nScan with WhatsApp → Linked Devices\n');
             }
 
             if (connection === 'open') {
-                console.log('✅ Bot is successfully connected and LIVE 24/7!');
+                console.log('✅ SUCCESS! Bot is connected and running 24/7');
             }
 
             if (connection === 'close') {
+                console.log('Connection closed...');
                 const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-                console.log('Connection closed. Reconnecting:', shouldReconnect);
                 if (shouldReconnect) {
-                    setTimeout(connectToWhatsApp, 5000);
+                    console.log('Reconnecting in 10 seconds...');
+                    setTimeout(connectToWhatsApp, 10000);
                 }
             }
         });
 
-    } catch (error) {
-        console.error("❌ Critical Error:", error.message);
+    } catch (err) {
+        console.error('❌ Critical Error:', err.message);
     }
 }
 
