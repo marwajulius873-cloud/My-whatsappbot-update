@@ -1,9 +1,30 @@
 require('dotenv').config();
+const express = require('express');
 const makeWASocket = require('@whiskeysockets/baileys').default;
 const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 
 console.log("🚀 Starting WhatsApp Bot...");
+
+// Add HTTP server for Render
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('✅ WhatsApp Bot is running!');
+});
+
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🌐 HTTP Server running on port ${PORT}`);
+});
 
 async function connectToWhatsApp() {
     try {
@@ -14,7 +35,7 @@ async function connectToWhatsApp() {
             logger: pino({ level: 'silent' }),
             markRead: true,
             printQRInTerminal: false,
-            mobile: false, // Use pairing code (not mobile)
+            mobile: false,
         });
 
         sock.ev.on('creds.update', saveCreds);
@@ -35,15 +56,14 @@ async function connectToWhatsApp() {
             }
         });
 
-        // Request Pairing Code
         sock.ev.on('connection.update', async (update) => {
             if (update.qr) {
                 console.log("QR still received, trying pairing code instead...");
             }
         });
 
-        // Use Pairing Code (Better for servers)
-        const phoneNumber = "254113123471"; // ← Change this
+        // Use Pairing Code
+        const phoneNumber = "254113123471"; // ← Change this to your number
         const code = await sock.requestPairingCode(phoneNumber);
         console.log("\n🔥 YOUR PAIRING CODE:");
         console.log(code);
