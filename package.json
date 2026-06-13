@@ -7,9 +7,7 @@
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.0",
     "pino": "^8.15.0",
-    "lowdb": "^7.0.0",
-    "fs-extra": "^11.1.1",
-    "openai": "^4.0.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "qrcode-terminal": "^0.12.0"
   }
 }
